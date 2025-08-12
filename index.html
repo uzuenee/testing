@@ -1,721 +1,916 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<title>My GPT Clone</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<style>
-:root {
---bg: #0f1115;
---panel: #151823;
---panel-2: #1b2130;
---text: #dbe1ee;
---muted: #9aa3b2;
---accent: #4f8cff;
---danger: #ff5c5c;
---ok: #28c18f;
---border: #263043;
-}
-* { box-sizing: border-box; }
-body{ margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial; }
-button, input, select, textarea { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
-button { cursor: pointer; }
-button.primary { background: var(--accent); border-color: var(--accent); color: white; }
-button.ghost { background: transparent; border-color: var(--border); }
-button.danger { background: var(--danger); border-color: var(--danger); color: white; }
-label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 6px; }
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-
-.topbar {
-display:flex; align-items:center; justify-content:space-between;
-padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--panel);
-position: sticky; top: 0; z-index: 20;
-}
-.brand { font-weight: 700; }
-.layout { display:flex; min-height: 100vh; }
-.sidebar {
-width: 280px; border-right: 1px solid var(--border); background: var(--panel); padding: 10px; display:flex; flex-direction:column; gap: 10px;
-}
-.sidebar .row { display:flex; gap:8px; }
-.sidebar input[type="file"] { display:none; }
-.chat-list { flex:1 1 auto; overflow:auto; display:flex; flex-direction:column; gap:6px; padding-right: 4px; }
-.chat-item { padding:8px; border:1px solid var(--border); border-radius: 8px; background: var(--panel-2); display:flex; align-items:center; justify-content:space-between; gap: 8px; }
-.chat-item.active { outline: 1px solid var(--accent); }
-.chat-title { flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.chat-actions button { padding:6px 8px; font-size:12px; }
-
-.main { flex:1 1 auto; display:flex; flex-direction:column; height: 100vh; }
-.controls {
-display:flex; gap:10px; flex-wrap: wrap; padding: 10px; border-bottom: 1px solid var(--border); background: var(--panel);
-position: sticky; top: 48px; z-index: 19;
-}
-.controls .col { min-width: 220px; }
-.settings-panel {
-display:none; padding: 10px; border-bottom:1px solid var(--border); background: var(--panel);
-}
-.settings-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:10px; }
-.system-area { grid-column: 1/-1; }
-textarea { width:100%; min-height: 80px; resize: vertical; }
-
-.messages { flex:1 1 auto; overflow:auto; padding: 20px; display:flex; flex-direction:column; gap: 10px;}
-.msg { padding: 12px; border-radius: 12px; max-width: 900px; white-space: pre-wrap; line-height: 1.4; }
-.user { background: #25304a; align-self:flex-end; }
-.assistant { background: #1b2130; }
-.meta { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-.composer { display:flex; gap:10px; border-top:1px solid var(--border); padding: 10px; background: var(--panel); }
-.composer textarea { flex:1; min-height: 60px; }
-.hint { color: var(--muted); font-size: 12px; }
-
-.login-wrap { max-width: 420px; margin: 10vh auto; background: var(--panel); padding: 20px; border:1px solid var(--border); border-radius: 12px; }
-.login-grid { display:grid; gap: 10px; }
-.badge { display:inline-block; padding:2px 6px; border-radius: 6px; background: var(--panel-2); border:1px solid var(--border); color: var(--muted); font-size: 12px; }
-
-.row { display:flex; gap:8px; align-items:center; }
-.grow { flex: 1 1 auto; }
-</style>
-
-</head>
-<body>
-<div class="topbar">
-<div class="brand">My GPT Clone</div>
-<div class="row">
-<span id="authStatus" class="badge">Not signed in</span>
-<button id="btnLogout" class="ghost" style="display:none">Log out</button>
-<a href="https://platform.openai.com/" target="_blank" class="badge">Powered by OpenAI</a>
-</div>
-</div>
-
-<div id="loginView" class="login-wrap" style="display:none">
-<h3>Sign in</h3>
-<div class="login-grid">
-<div>
-<label>Username</label>
-<input id="loginUser" placeholder="username" />
-</div>
-<div>
-<label>Password</label>
-<input id="loginPass" type="password" placeholder="password" />
-</div>
-<button id="btnLogin" class="primary">Sign in</button>
-<div class="hint">Set APP_USERNAME and APP_PASSWORD in your Cloudflare Pages environment variables.</div>
-</div>
-</div>
-
-<div id="appView" class="layout" style="display:none">
-<aside class="sidebar">
-<div class="row">
-<button id="btnNewChat" class="primary">+ New chat</button>
-<button id="btnClearChat" class="ghost">Clear</button>
-</div>
-<div class="row">
-<button id="btnExport" class="ghost">Export</button>
-<label for="fileImport" class="ghost" style="text-align:center; cursor:pointer; padding:10px;">Import</label>
-<input id="fileImport" type="file" accept=".json" />
-</div>
-<div class="chat-list" id="chatList"></div>
-<div class="hint">Chats are stored locally in this browser only.</div>
-</aside>
-
-<main class="main">
-<div class="controls">
-<div class="col">
-<label>Model</label>
-<div class="row">
-<select id="modelSelect" class="grow"></select>
-<button id="btnReloadModels" class="ghost">Reload</button>
-</div>
-</div>
-<div class="col">
-<label>Reasoning effort</label>
-<select id="reasoningEffort">
-<option value="low">low</option>
-<option value="medium" selected>medium</option>
-<option value="high">high</option>
-</select>
-</div>
-<div class="col">
-<label>Verbosity</label>
-<select id="verbosity">
-<option value="low">low</option>
-<option value="medium" selected>medium</option>
-<option value="high">high</option>
-</select>
-</div>
-<div class="col">
-<label>&nbsp;</label>
-<button id="btnToggleSettings" class="ghost">Toggle system prompt</button>
-</div>
-</div>
-
-<div class="settings-panel" id="settingsPanel">
-<div class="settings-grid">
-<div class="system-area">
-<label>System instructions</label>
-<textarea id="systemPrompt" placeholder="You are a helpful, concise assistant."></textarea>
-</div>
-<div>
-<label>&nbsp;</label>
-<button id="btnSaveSettings" class="primary">Save settings</button>
-<button id="btnResetSettings" class="ghost">Reset to defaults</button>
-</div>
-</div>
-</div>
-
-<div id="messages" class="messages"></div>
-
-<div class="composer">
-<textarea id="userInput" placeholder="Type your message. Shift+Enter = newline"></textarea>
-<div class="row" style="flex-direction:column; gap:6px">
-<button id="btnSend" class="primary">Send</button>
-<button id="btnStop" class="ghost" disabled>Stop</button>
-</div>
-</div>
-</main> </div>
-
-<script>
-// -----------------------
-// Simple Single-User Chat App (Frontend)
-// -----------------------
-
-const els = {
-loginView: document.getElementById('loginView'),
-appView: document.getElementById('appView'),
-btnLogin: document.getElementById('btnLogin'),
-loginUser: document.getElementById('loginUser'),
-loginPass: document.getElementById('loginPass'),
-authStatus: document.getElementById('authStatus'),
-btnLogout: document.getElementById('btnLogout'),
-
-modelSelect: document.getElementById('modelSelect'),
-btnReloadModels: document.getElementById('btnReloadModels'),
-reasoningEffort: document.getElementById('reasoningEffort'),
-verbosity: document.getElementById('verbosity'),
-btnToggleSettings: document.getElementById('btnToggleSettings'),
-settingsPanel: document.getElementById('settingsPanel'),
-systemPrompt: document.getElementById('systemPrompt'),
-btnSaveSettings: document.getElementById('btnSaveSettings'),
-btnResetSettings: document.getElementById('btnResetSettings'),
-
-chatList: document.getElementById('chatList'),
-btnNewChat: document.getElementById('btnNewChat'),
-btnClearChat: document.getElementById('btnClearChat'),
-btnExport: document.getElementById('btnExport'),
-fileImport: document.getElementById('fileImport'),
-
-messages: document.getElementById('messages'),
-userInput: document.getElementById('userInput'),
-btnSend: document.getElementById('btnSend'),
-btnStop: document.getElementById('btnStop'),
-};
-
-// -----------------------
-// Storage
-// -----------------------
-const LS_SETTINGS = 'gptclone_settings_v1';
-const LS_CHATS = 'gptclone_chats_v1';
-const LS_ACTIVE = 'gptclone_active_v1';
-
-function defaultSettings() {
-return {
-model: 'gpt-4o-mini',
-reasoning_effort: 'medium',
-verbosity: 'medium',
-system_prompt: 'You are a helpful assistant.',
-};
-}
-
-function toLMH(v) {
-// Convert legacy values to low/medium/high
-if (v === 'low' || v === 'medium' || v === 'high') return v;
-const n = Number(v);
-if (!isNaN(n)) {
-if (n <= 2) return 'low';
-if (n === 3) return 'medium';
-return 'high';
-}
-return 'medium';
-}
-
-function normalizeSettings(s) {
-const d = defaultSettings();
-return {
-model: s.model || d.model,
-reasoning_effort: s.reasoning_effort || d.reasoning_effort,
-verbosity: toLMH(s.verbosity || d.verbosity),
-system_prompt: s.system_prompt || d.system_prompt,
-};
-}
-
-function loadSettings() {
-try {
-const raw = JSON.parse(localStorage.getItem(LS_SETTINGS)) || defaultSettings();
-return normalizeSettings(raw);
-} catch { return defaultSettings(); }
-}
-
-function saveSettings(s) {
-localStorage.setItem(LS_SETTINGS, JSON.stringify(normalizeSettings(s)));
-}
-
-function loadChats() {
-try {
-const x = JSON.parse(localStorage.getItem(LS_CHATS));
-return Array.isArray(x) ? x : [];
-} catch { return []; }
-}
-
-function saveChats(chats) {
-localStorage.setItem(LS_CHATS, JSON.stringify(chats));
-}
-
-function getActiveChatId() {
-return localStorage.getItem(LS_ACTIVE);
-}
-
-function setActiveChatId(id) {
-localStorage.setItem(LS_ACTIVE, id);
-}
-
-function newId() {
-return 'c_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
-
-function createChat(title = 'New chat') {
-const chat = { id: newId(), title, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
-const chats = loadChats();
-chats.unshift(chat);
-saveChats(chats);
-setActiveChatId(chat.id);
-return chat;
-}
-
-function getChat(id) {
-return loadChats().find(c => c.id === id);
-}
-
-function updateChat(chat) {
-const chats = loadChats();
-const idx = chats.findIndex(c => c.id === chat.id);
-if (idx !== -1) {
-chat.updatedAt = Date.now();
-chats[idx] = chat;
-saveChats(chats);
-}
-}
-
-function deleteChat(id) {
-const chats = loadChats().filter(c => c.id !== id);
-saveChats(chats);
-const active = getActiveChatId();
-if (active === id) {
-if (chats.length) setActiveChatId(chats[0].id);
-else setActiveChatId('');
-}
-}
-
-// -----------------------
-// Auth
-// -----------------------
-async function checkSession() {
-try {
-const r = await fetch('/api/session', { credentials: 'include' });
-if (r.ok) {
-const j = await r.json();
-if (j.authenticated) {
-els.authStatus.textContent = 'Signed in';
-els.btnLogout.style.display = '';
-return true;
-}
-}
-} catch {}
-els.authStatus.textContent = 'Not signed in';
-els.btnLogout.style.display = 'none';
-return false;
-}
-
-async function doLogin(username, password) {
-const r = await fetch('/api/login', {
-method: 'POST',
-headers: {'Content-Type': 'application/json'},
-credentials: 'include',
-body: JSON.stringify({ username, password }),
-});
-if (!r.ok) {
-const t = await r.text();
-throw new Error(t || 'Login failed');
-}
-return r.json();
-}
-async function doLogout() {
-await fetch('/api/logout', { method: 'POST', credentials: 'include' });
-}
-
-function showLogin() { els.loginView.style.display = ''; els.appView.style.display = 'none'; }
-function showApp() { els.loginView.style.display = 'none'; els.appView.style.display = ''; }
-
-// -----------------------
-// UI helpers
-// -----------------------
-function setSettingsUI(s) {
-els.reasoningEffort.value = s.reasoning_effort;
-els.verbosity.value = s.verbosity;
-els.systemPrompt.value = s.system_prompt;
-}
-
-function getSettingsUI() {
-return {
-model: els.modelSelect.value || 'gpt-4o-mini',
-reasoning_effort: els.reasoningEffort.value || 'medium',
-verbosity: els.verbosity.value || 'medium',
-system_prompt: els.systemPrompt.value.trim() || 'You are a helpful assistant.',
-};
-}
-
-function renderChatList() {
-const chats = loadChats();
-const active = getActiveChatId();
-els.chatList.innerHTML = '';
-chats.forEach(c => {
-const row = document.createElement('div');
-row.className = 'chat-item' + (c.id === active ? ' active' : '');
-const title = document.createElement('div');
-title.className = 'chat-title';
-title.textContent = c.title;
-title.title = c.title;
-
-const actions = document.createElement('div');
-actions.className = 'chat-actions';
-const btnRename = document.createElement('button');
-btnRename.textContent = 'Rename';
-btnRename.onclick = () => {
-const t = prompt('Rename chat', c.title);
-if (t && t.trim()) {
-c.title = t.trim();
-updateChat(c);
-renderChatList();
-}
-};
-const btnDel = document.createElement('button');
-btnDel.className = 'danger';
-btnDel.textContent = 'Delete';
-btnDel.onclick = () => {
-if (confirm('Delete chat?')) {
-deleteChat(c.id);
-renderChatList();
-renderMessages();
-}
-};
-actions.appendChild(btnRename);
-actions.appendChild(btnDel);
-
-row.appendChild(title);
-row.appendChild(actions);
-
-row.onclick = (e) => {
-if (e.target === btnRename || e.target === btnDel) return;
-setActiveChatId(c.id);
-renderChatList();
-renderMessages();
-};
-els.chatList.appendChild(row);
-});
-}
-
-function renderMessages() {
-const chat = getChat(getActiveChatId());
-els.messages.innerHTML = '';
-if (!chat) return;
-for (const m of chat.messages) {
-const msg = document.createElement('div');
-msg.className = 'msg ' + (m.role === 'user' ? 'user' : 'assistant');
-
-const meta = document.createElement('div');
-meta.className = 'meta';
-meta.textContent = m.role === 'user' ? 'You' : 'Assistant';
-const body = document.createElement('div');
-body.textContent = m.content;
-
-msg.appendChild(meta);
-msg.appendChild(body);
-els.messages.appendChild(msg);
-}
-els.messages.scrollTop = els.messages.scrollHeight;
-}
-
-function addMessageToUI(role, content) {
-const msg = document.createElement('div');
-msg.className = 'msg ' + (role === 'user' ? 'user' : 'assistant');
-const meta = document.createElement('div');
-meta.className = 'meta';
-meta.textContent = role === 'user' ? 'You' : 'Assistant';
-const body = document.createElement('div');
-body.textContent = content;
-msg.appendChild(meta);
-msg.appendChild(body);
-els.messages.appendChild(msg);
-els.messages.scrollTop = els.messages.scrollHeight;
-}
-
-function ensureActiveChat() {
-let active = getActiveChatId();
-let chat = getChat(active);
-if (!chat) {
-chat = createChat();
-}
-renderChatList();
-return chat;
-}
-
-// -----------------------
-// Models
-// -----------------------
-const DEFAULT_MODELS = [
-'gpt-4o',
-'gpt-4o-mini',
-'o4-mini',
-'o3-mini',
-];
-async function loadModels() {
-try {
-const r = await fetch('/api/models', { credentials: 'include' });
-if (r.ok) {
-const j = await r.json();
-fillModelSelect((j.models && j.models.length) ? j.models : DEFAULT_MODELS);
-return;
-}
-} catch {}
-fillModelSelect(DEFAULT_MODELS);
-}
-function fillModelSelect(models) {
-const s = loadSettings();
-els.modelSelect.innerHTML = '';
-for (const m of models) {
-const opt = document.createElement('option');
-opt.value = m; opt.textContent = m;
-if (s.model === m) opt.selected = true;
-els.modelSelect.appendChild(opt);
-}
-}
-
-// -----------------------
-// Chat send
-// -----------------------
-let abortController = null;
-
-async function sendMessage() {
-const text = els.userInput.value.trim();
-if (!text) return;
-
-const s = getSettingsUI();
-saveSettings({ ...loadSettings(), ...s });
-
-const chat = ensureActiveChat();
-if (chat.messages.length === 0) {
-chat.title = text.slice(0, 40) + (text.length > 40 ? '…' : '');
-}
-
-chat.messages.push({ role: 'user', content: text });
-updateChat(chat);
-addMessageToUI('user', text);
-els.userInput.value = '';
-
-const placeholder = document.createElement('div');
-placeholder.className = 'msg assistant';
-const meta = document.createElement('div');
-meta.className = 'meta';
-meta.textContent = 'Assistant';
-const body = document.createElement('div');
-body.textContent = 'Thinking...';
-placeholder.appendChild(meta);
-placeholder.appendChild(body);
-els.messages.appendChild(placeholder);
-els.messages.scrollTop = els.messages.scrollHeight;
-
-els.btnSend.disabled = true;
-els.btnStop.disabled = false;
-abortController = new AbortController();
-
-try {
-const payload = {
-model: s.model,
-system: s.system_prompt,
-verbosity: s.verbosity,
-settings: {
-reasoning_effort: s.reasoning_effort,
-},
-messages: chat.messages,
-};
-
-const r = await fetch('/api/chat', {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-credentials: 'include',
-body: JSON.stringify(payload),
-signal: abortController.signal,
-});
-if (!r.ok) {
-throw new Error(await r.text());
-}
-const data = await r.json();
-const reply = (data && data.reply) ? data.reply : '(no reply)';
-body.textContent = reply;
-
-chat.messages.push({ role: 'assistant', content: reply });
-updateChat(chat);
-renderChatList();
-} catch (err) {
-body.textContent = 'Error: ' + (err && err.message ? err.message : String(err));
-} finally {
-els.btnSend.disabled = false;
-els.btnStop.disabled = true;
-abortController = null;
-}
-}
-
-function stopRequest() {
-if (abortController) abortController.abort();
-els.btnSend.disabled = false;
-els.btnStop.disabled = true;
-}
-
-// -----------------------
-// Event wiring
-// -----------------------
-els.btnLogin.onclick = async () => {
-els.btnLogin.disabled = true;
-try {
-await doLogin(els.loginUser.value.trim(), els.loginPass.value);
-if (await checkSession()) {
-showApp();
-} else {
-alert('Login failed');
-}
-} catch (e) {
-alert('Login failed: ' + (e && e.message ? e.message : 'Unknown'));
-} finally {
-els.btnLogin.disabled = false;
-}
-};
-
-els.btnLogout.onclick = async () => {
-await doLogout();
-els.authStatus.textContent = 'Not signed in';
-showLogin();
-};
-
-els.btnToggleSettings.onclick = () => {
-els.settingsPanel.style.display = (els.settingsPanel.style.display === 'none' || !els.settingsPanel.style.display) ? 'block' : 'none';
-};
-
-els.btnSaveSettings.onclick = () => {
-saveSettings({ ...loadSettings(), ...getSettingsUI() });
-alert('Settings saved');
-};
-els.btnResetSettings.onclick = () => {
-const d = defaultSettings();
-saveSettings(d);
-setSettingsUI(d);
-alert('Settings reset');
-};
-
-els.btnNewChat.onclick = () => {
-const chat = createChat();
-renderChatList();
-renderMessages();
-};
-
-els.btnClearChat.onclick = () => {
-const chat = getChat(getActiveChatId());
-if (!chat) return;
-if (!confirm('Clear messages in this chat?')) return;
-chat.messages = [];
-updateChat(chat);
-renderMessages();
-};
-
-els.btnExport.onclick = () => {
-const data = {
-app: 'my-gpt-clone',
-version: 2,
-exportedAt: new Date().toISOString(),
-settings: loadSettings(),
-chats: loadChats(),
-};
-const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-const url = URL.createObjectURL(blob);
-const a = document.createElement('a');
-a.href = url;
-a.download = 'my-gpt-clone-export.json';
-a.click();
-URL.revokeObjectURL(url);
-};
-
-els.fileImport.onchange = async (e) => {
-const file = e.target.files[0];
-if (!file) return;
-try {
-const text = await file.text();
-const data = JSON.parse(text);
-if (data && Array.isArray(data.chats)) {
-saveChats(data.chats);
-if (data.settings) saveSettings(data.settings);
-renderChatList();
-renderMessages();
-setSettingsUI(loadSettings());
-alert('Imported successfully.');
-} else {
-alert('Invalid import file.');
-}
-} catch (err) {
-alert('Import failed: ' + err.message);
-} finally {
-e.target.value = '';
-}
-};
-
-els.btnSend.onclick = sendMessage;
-els.btnStop.onclick = stopRequest;
-
-els.userInput.addEventListener('keydown', (e) => {
-if (e.key === 'Enter' && !e.shiftKey) {
-e.preventDefault();
-sendMessage();
-}
-});
-
-els.btnReloadModels.onclick = async () => {
-await loadModels();
-alert('Models updated.');
-};
-
-// -----------------------
-// Init
-// -----------------------
-async function init() {
-const ok = await checkSession();
-if (!ok) {
-showLogin();
-return;
-}
-showApp();
-
-await loadModels();
-const s = loadSettings();
-if (![...els.modelSelect.options].some(o => o.value === s.model)) {
-const opt = document.createElement('option');
-opt.value = s.model; opt.textContent = s.model;
-els.modelSelect.appendChild(opt);
-els.modelSelect.value = s.model;
-}
-setSettingsUI(s);
-
-ensureActiveChat();
-renderChatList();
-renderMessages();
-}
-
-init();
-</script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>My GPT Clone</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #151823;
+        --panel-2: #1b2130;
+        --text: #dbe1ee;
+        --muted: #9aa3b2;
+        --accent: #4f8cff;
+        --danger: #ff5c5c;
+        --ok: #28c18f;
+        --border: #263043;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          Ubuntu, Cantarell, "Helvetica Neue", Arial;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        background: var(--panel-2);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 14px;
+      }
+      button {
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      button.ghost {
+        background: transparent;
+        border-color: var(--border);
+      }
+      button.danger {
+        background: var(--danger);
+        border-color: var(--danger);
+        color: #fff;
+      }
+      label {
+        font-size: 12px;
+        color: var(--muted);
+        display: block;
+        margin-bottom: 6px;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+        position: sticky;
+        top: 0;
+        z-index: 20;
+      }
+      .brand {
+        font-weight: 700;
+      }
+      .layout {
+        display: flex;
+        min-height: 100vh;
+      }
+      .sidebar {
+        width: 280px;
+        border-right: 1px solid var(--border);
+        background: var(--panel);
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .sidebar .row {
+        display: flex;
+        gap: 8px;
+      }
+      .sidebar input[type="file"] {
+        display: none;
+      }
+      .chat-list {
+        flex: 1 1 auto;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding-right: 4px;
+      }
+      .chat-item {
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--panel-2);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .chat-item.active {
+        outline: 1px solid var(--accent);
+      }
+      .chat-title {
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .chat-actions button {
+        padding: 6px 8px;
+        font-size: 12px;
+      }
+
+      .main {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 10px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+        position: sticky;
+        top: 48px;
+        z-index: 19;
+      }
+      .controls .col {
+        min-width: 220px;
+      }
+      .settings-panel {
+        display: none;
+        padding: 10px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+      }
+      .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 10px;
+      }
+      .system-area {
+        grid-column: 1 / -1;
+      }
+      textarea {
+        width: 100%;
+        min-height: 80px;
+        resize: vertical;
+      }
+
+      .messages {
+        flex: 1 1 auto;
+        overflow: auto;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .msg {
+        padding: 12px;
+        border-radius: 12px;
+        max-width: 900px;
+        white-space: pre-wrap;
+        line-height: 1.4;
+      }
+      .user {
+        background: #25304a;
+        align-self: flex-end;
+      }
+      .assistant {
+        background: #1b2130;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 4px;
+      }
+      .composer {
+        display: flex;
+        gap: 10px;
+        border-top: 1px solid var(--border);
+        padding: 10px;
+        background: var(--panel);
+      }
+      .composer textarea {
+        flex: 1;
+        min-height: 60px;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .login-wrap {
+        max-width: 420px;
+        margin: 10vh auto;
+        background: var(--panel);
+        padding: 20px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+      .login-grid {
+        display: grid;
+        gap: 10px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .grow {
+        flex: 1 1 auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="brand">My GPT Clone</div>
+      <div class="row">
+        <span id="authStatus" class="badge">Not signed in</span>
+        <button id="btnLogout" class="ghost" style="display:none">Log out</button>
+        <a
+          href="https://platform.openai.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="badge"
+          >Powered by OpenAI</a
+        >
+      </div>
+    </div>
+
+    <div id="loginView" class="login-wrap" style="display:none">
+      <h3>Sign in</h3>
+      <div class="login-grid">
+        <div>
+          <label>Username</label>
+          <input id="loginUser" placeholder="username" />
+        </div>
+        <div>
+          <label>Password</label>
+          <input id="loginPass" type="password" placeholder="password" />
+        </div>
+        <button id="btnLogin" class="primary">Sign in</button>
+        <div class="hint">
+          Set APP_USERNAME and APP_PASSWORD in your Cloudflare Pages environment
+          variables.
+        </div>
+      </div>
+    </div>
+
+    <div id="appView" class="layout" style="display:none">
+      <aside class="sidebar">
+        <div class="row">
+          <button id="btnNewChat" class="primary">+ New chat</button>
+          <button id="btnClearChat" class="ghost">Clear</button>
+        </div>
+        <div class="row">
+          <button id="btnExport" class="ghost">Export</button>
+          <label for="fileImport" class="ghost" style="text-align:center; cursor:pointer; padding:10px;"
+            >Import</label
+          >
+          <input id="fileImport" type="file" accept=".json" />
+        </div>
+        <div class="chat-list" id="chatList"></div>
+        <div class="hint">Chats are stored locally in this browser only.</div>
+      </aside>
+
+      <main class="main">
+        <div class="controls">
+          <div class="col">
+            <label>Model</label>
+            <div class="row">
+              <select id="modelSelect" class="grow"></select>
+              <button id="btnReloadModels" class="ghost">Reload</button>
+            </div>
+          </div>
+          <div class="col">
+            <label>Reasoning effort</label>
+            <select id="reasoningEffort">
+              <option value="low">low</option>
+              <option value="medium" selected>medium</option>
+              <option value="high">high</option>
+            </select>
+          </div>
+          <div class="col">
+            <label>Verbosity</label>
+            <select id="verbosity">
+              <option value="low">low</option>
+              <option value="medium" selected>medium</option>
+              <option value="high">high</option>
+            </select>
+          </div>
+          <div class="col">
+            <label>&nbsp;</label>
+            <button id="btnToggleSettings" class="ghost">Toggle system prompt</button>
+          </div>
+        </div>
+
+        <div class="settings-panel" id="settingsPanel">
+          <div class="settings-grid">
+            <div class="system-area">
+              <label>System instructions</label>
+              <textarea id="systemPrompt" placeholder="You are a helpful, concise assistant."></textarea>
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <button id="btnSaveSettings" class="primary">Save settings</button>
+              <button id="btnResetSettings" class="ghost">Reset to defaults</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="messages" class="messages"></div>
+
+        <div class="composer">
+          <textarea id="userInput" placeholder="Type your message. Shift+Enter = newline"></textarea>
+          <div class="row" style="flex-direction:column; gap:6px">
+            <button id="btnSend" class="primary">Send</button>
+            <button id="btnStop" class="ghost" disabled>Stop</button>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      // -----------------------
+      // Simple Single-User Chat App (Frontend)
+      // -----------------------
+
+      const els = {
+        loginView: document.getElementById("loginView"),
+        appView: document.getElementById("appView"),
+        btnLogin: document.getElementById("btnLogin"),
+        loginUser: document.getElementById("loginUser"),
+        loginPass: document.getElementById("loginPass"),
+        authStatus: document.getElementById("authStatus"),
+        btnLogout: document.getElementById("btnLogout"),
+
+        modelSelect: document.getElementById("modelSelect"),
+        btnReloadModels: document.getElementById("btnReloadModels"),
+        reasoningEffort: document.getElementById("reasoningEffort"),
+        verbosity: document.getElementById("verbosity"),
+        btnToggleSettings: document.getElementById("btnToggleSettings"),
+        settingsPanel: document.getElementById("settingsPanel"),
+        systemPrompt: document.getElementById("systemPrompt"),
+        btnSaveSettings: document.getElementById("btnSaveSettings"),
+        btnResetSettings: document.getElementById("btnResetSettings"),
+
+        chatList: document.getElementById("chatList"),
+        btnNewChat: document.getElementById("btnNewChat"),
+        btnClearChat: document.getElementById("btnClearChat"),
+        btnExport: document.getElementById("btnExport"),
+        fileImport: document.getElementById("fileImport"),
+
+        messages: document.getElementById("messages"),
+        userInput: document.getElementById("userInput"),
+        btnSend: document.getElementById("btnSend"),
+        btnStop: document.getElementById("btnStop")
+      };
+
+      // -----------------------
+      // Storage
+      // -----------------------
+      const LS_SETTINGS = "gptclone_settings_v1";
+      const LS_CHATS = "gptclone_chats_v1";
+      const LS_ACTIVE = "gptclone_active_v1";
+
+      function defaultSettings() {
+        return {
+          model: "gpt-4o-mini",
+          reasoning_effort: "medium",
+          verbosity: "medium",
+          system_prompt: "You are a helpful assistant."
+        };
+      }
+
+      function toLMH(v) {
+        // Convert legacy values to low/medium/high
+        if (v === "low" || v === "medium" || v === "high") return v;
+        const n = Number(v);
+        if (!isNaN(n)) {
+          if (n <= 2) return "low";
+          if (n === 3) return "medium";
+          return "high";
+        }
+        return "medium";
+      }
+
+      function normalizeSettings(s) {
+        const d = defaultSettings();
+        return {
+          model: s.model || d.model,
+          reasoning_effort: s.reasoning_effort || d.reasoning_effort,
+          verbosity: toLMH(s.verbosity || d.verbosity),
+          system_prompt: s.system_prompt || d.system_prompt
+        };
+      }
+
+      function loadSettings() {
+        try {
+          const raw = JSON.parse(localStorage.getItem(LS_SETTINGS)) || defaultSettings();
+          return normalizeSettings(raw);
+        } catch {
+          return defaultSettings();
+        }
+      }
+
+      function saveSettings(s) {
+        localStorage.setItem(LS_SETTINGS, JSON.stringify(normalizeSettings(s)));
+      }
+
+      function loadChats() {
+        try {
+          const x = JSON.parse(localStorage.getItem(LS_CHATS));
+          return Array.isArray(x) ? x : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function saveChats(chats) {
+        localStorage.setItem(LS_CHATS, JSON.stringify(chats));
+      }
+
+      function getActiveChatId() {
+        return localStorage.getItem(LS_ACTIVE);
+      }
+
+      function setActiveChatId(id) {
+        localStorage.setItem(LS_ACTIVE, id);
+      }
+
+      function newId() {
+        return "c_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      }
+
+      function createChat(title = "New chat") {
+        const chat = { id: newId(), title, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
+        const chats = loadChats();
+        chats.unshift(chat);
+        saveChats(chats);
+        setActiveChatId(chat.id);
+        return chat;
+      }
+
+      function getChat(id) {
+        return loadChats().find(c => c.id === id);
+      }
+
+      function updateChat(chat) {
+        const chats = loadChats();
+        const idx = chats.findIndex(c => c.id === chat.id);
+        if (idx !== -1) {
+          chat.updatedAt = Date.now();
+          chats[idx] = chat;
+          saveChats(chats);
+        }
+      }
+
+      function deleteChat(id) {
+        const chats = loadChats().filter(c => c.id !== id);
+        saveChats(chats);
+        const active = getActiveChatId();
+        if (active === id) {
+          if (chats.length) setActiveChatId(chats[0].id);
+          else setActiveChatId("");
+        }
+      }
+
+      // -----------------------
+      // Auth
+      // -----------------------
+      async function checkSession() {
+        try {
+          const r = await fetch("/api/session", { credentials: "include" });
+          if (r.ok) {
+            const j = await r.json();
+            if (j.authenticated) {
+              els.authStatus.textContent = "Signed in";
+              els.btnLogout.style.display = "";
+              return true;
+            }
+          }
+        } catch {}
+        els.authStatus.textContent = "Not signed in";
+        els.btnLogout.style.display = "none";
+        return false;
+      }
+
+      async function doLogin(username, password) {
+        const r = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ username, password })
+        });
+        if (!r.ok) {
+          const t = await r.text();
+          throw new Error(t || "Login failed");
+        }
+        return r.json();
+      }
+      async function doLogout() {
+        await fetch("/api/logout", { method: "POST", credentials: "include" });
+      }
+
+      function showLogin() {
+        els.loginView.style.display = "";
+        els.appView.style.display = "none";
+      }
+      function showApp() {
+        els.loginView.style.display = "none";
+        els.appView.style.display = "";
+      }
+
+      // -----------------------
+      // UI helpers
+      // -----------------------
+      function setSettingsUI(s) {
+        els.reasoningEffort.value = s.reasoning_effort;
+        els.verbosity.value = s.verbosity;
+        els.systemPrompt.value = s.system_prompt;
+      }
+
+      function getSettingsUI() {
+        return {
+          model: els.modelSelect.value || "gpt-4o-mini",
+          reasoning_effort: els.reasoningEffort.value || "medium",
+          verbosity: els.verbosity.value || "medium",
+          system_prompt: els.systemPrompt.value.trim() || "You are a helpful assistant."
+        };
+      }
+
+      function renderChatList() {
+        const chats = loadChats();
+        const active = getActiveChatId();
+        els.chatList.innerHTML = "";
+        chats.forEach(c => {
+          const row = document.createElement("div");
+          row.className = "chat-item" + (c.id === active ? " active" : "");
+          const title = document.createElement("div");
+          title.className = "chat-title";
+          title.textContent = c.title;
+          title.title = c.title;
+
+          const actions = document.createElement("div");
+          actions.className = "chat-actions";
+          const btnRename = document.createElement("button");
+          btnRename.textContent = "Rename";
+          btnRename.onclick = () => {
+            const t = prompt("Rename chat", c.title);
+            if (t && t.trim()) {
+              c.title = t.trim();
+              updateChat(c);
+              renderChatList();
+            }
+          };
+          const btnDel = document.createElement("button");
+          btnDel.className = "danger";
+          btnDel.textContent = "Delete";
+          btnDel.onclick = () => {
+            if (confirm("Delete chat?")) {
+              deleteChat(c.id);
+              renderChatList();
+              renderMessages();
+            }
+          };
+          actions.appendChild(btnRename);
+          actions.appendChild(btnDel);
+
+          row.appendChild(title);
+          row.appendChild(actions);
+
+          row.onclick = e => {
+            if (e.target === btnRename || e.target === btnDel) return;
+            setActiveChatId(c.id);
+            renderChatList();
+            renderMessages();
+          };
+          els.chatList.appendChild(row);
+        });
+      }
+
+      function renderMessages() {
+        const chat = getChat(getActiveChatId());
+        els.messages.innerHTML = "";
+        if (!chat) return;
+        for (const m of chat.messages) {
+          const msg = document.createElement("div");
+          msg.className = "msg " + (m.role === "user" ? "user" : "assistant");
+
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          meta.textContent = m.role === "user" ? "You" : "Assistant";
+          const body = document.createElement("div");
+          body.textContent = m.content;
+
+          msg.appendChild(meta);
+          msg.appendChild(body);
+          els.messages.appendChild(msg);
+        }
+        els.messages.scrollTop = els.messages.scrollHeight;
+      }
+
+      function addMessageToUI(role, content) {
+        const msg = document.createElement("div");
+        msg.className = "msg " + (role === "user" ? "user" : "assistant");
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = role === "user" ? "You" : "Assistant";
+        const body = document.createElement("div");
+        body.textContent = content;
+        msg.appendChild(meta);
+        msg.appendChild(body);
+        els.messages.appendChild(msg);
+        els.messages.scrollTop = els.messages.scrollHeight;
+      }
+
+      function ensureActiveChat() {
+        let active = getActiveChatId();
+        let chat = getChat(active);
+        if (!chat) {
+          chat = createChat();
+        }
+        renderChatList();
+        return chat;
+      }
+
+      // -----------------------
+      // Models
+      // -----------------------
+      const DEFAULT_MODELS = ["gpt-4o", "gpt-4o-mini", "o4-mini", "o3-mini"];
+      async function loadModels() {
+        try {
+          const r = await fetch("/api/models", { credentials: "include" });
+          if (r.ok) {
+            const j = await r.json();
+            fillModelSelect((j.models && j.models.length) ? j.models : DEFAULT_MODELS);
+            return;
+          }
+        } catch {}
+        fillModelSelect(DEFAULT_MODELS);
+      }
+      function fillModelSelect(models) {
+        const s = loadSettings();
+        els.modelSelect.innerHTML = "";
+        for (const m of models) {
+          const opt = document.createElement("option");
+          opt.value = m;
+          opt.textContent = m;
+          if (s.model === m) opt.selected = true;
+          els.modelSelect.appendChild(opt);
+        }
+      }
+
+      // -----------------------
+      // Chat send
+      // -----------------------
+      let abortController = null;
+
+      async function sendMessage() {
+        const text = els.userInput.value.trim();
+        if (!text) return;
+
+        const s = getSettingsUI();
+        saveSettings({ ...loadSettings(), ...s });
+
+        const chat = ensureActiveChat();
+        if (chat.messages.length === 0) {
+          chat.title = text.slice(0, 40) + (text.length > 40 ? "…" : "");
+        }
+
+        chat.messages.push({ role: "user", content: text });
+        updateChat(chat);
+        addMessageToUI("user", text);
+        els.userInput.value = "";
+
+        const placeholder = document.createElement("div");
+        placeholder.className = "msg assistant";
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = "Assistant";
+        const body = document.createElement("div");
+        body.textContent = "Thinking...";
+        placeholder.appendChild(meta);
+        placeholder.appendChild(body);
+        els.messages.appendChild(placeholder);
+        els.messages.scrollTop = els.messages.scrollHeight;
+
+        els.btnSend.disabled = true;
+        els.btnStop.disabled = false;
+        abortController = new AbortController();
+
+        try {
+          const payload = {
+            model: s.model,
+            system: s.system_prompt,
+            verbosity: s.verbosity,
+            settings: {
+              reasoning_effort: s.reasoning_effort
+            },
+            messages: chat.messages
+          };
+
+          const r = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(payload),
+            signal: abortController.signal
+          });
+          if (!r.ok) {
+            throw new Error(await r.text());
+          }
+          const data = await r.json();
+          const reply = data && data.reply ? data.reply : "(no reply)";
+          body.textContent = reply;
+
+          chat.messages.push({ role: "assistant", content: reply });
+          updateChat(chat);
+          renderChatList();
+        } catch (err) {
+          body.textContent = "Error: " + (err && err.message ? err.message : String(err));
+        } finally {
+          els.btnSend.disabled = false;
+          els.btnStop.disabled = true;
+          abortController = null;
+        }
+      }
+
+      function stopRequest() {
+        if (abortController) abortController.abort();
+        els.btnSend.disabled = false;
+        els.btnStop.disabled = true;
+      }
+
+      // -----------------------
+      // Event wiring
+      // -----------------------
+      els.btnLogin.onclick = async () => {
+        els.btnLogin.disabled = true;
+        try {
+          await doLogin(els.loginUser.value.trim(), els.loginPass.value);
+          if (await checkSession()) {
+            showApp();
+          } else {
+            alert("Login failed");
+          }
+        } catch (e) {
+          alert("Login failed: " + (e && e.message ? e.message : "Unknown"));
+        } finally {
+          els.btnLogin.disabled = false;
+        }
+      };
+
+      els.btnLogout.onclick = async () => {
+        await doLogout();
+        els.authStatus.textContent = "Not signed in";
+        showLogin();
+      };
+
+      els.btnToggleSettings.onclick = () => {
+        els.settingsPanel.style.display =
+          els.settingsPanel.style.display === "none" || !els.settingsPanel.style.display ? "block" : "none";
+      };
+
+      els.btnSaveSettings.onclick = () => {
+        saveSettings({ ...loadSettings(), ...getSettingsUI() });
+        alert("Settings saved");
+      };
+      els.btnResetSettings.onclick = () => {
+        const d = defaultSettings();
+        saveSettings(d);
+        setSettingsUI(d);
+        alert("Settings reset");
+      };
+
+      els.btnNewChat.onclick = () => {
+        createChat();
+        renderChatList();
+        renderMessages();
+      };
+
+      els.btnClearChat.onclick = () => {
+        const chat = getChat(getActiveChatId());
+        if (!chat) return;
+        if (!confirm("Clear messages in this chat?")) return;
+        chat.messages = [];
+        updateChat(chat);
+        renderMessages();
+      };
+
+      els.btnExport.onclick = () => {
+        const data = {
+          app: "my-gpt-clone",
+          version: 2,
+          exportedAt: new Date().toISOString(),
+          settings: loadSettings(),
+          chats: loadChats()
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "my-gpt-clone-export.json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      };
+
+      els.fileImport.onchange = async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const data = JSON.parse(text);
+          if (data && Array.isArray(data.chats)) {
+            saveChats(data.chats);
+            if (data.settings) saveSettings(data.settings);
+            renderChatList();
+            renderMessages();
+            setSettingsUI(loadSettings());
+            alert("Imported successfully.");
+          } else {
+            alert("Invalid import file.");
+          }
+        } catch (err) {
+          alert("Import failed: " + err.message);
+        } finally {
+          e.target.value = "";
+        }
+      };
+
+      els.btnSend.onclick = sendMessage;
+      els.btnStop.onclick = stopRequest;
+
+      els.userInput.addEventListener("keydown", e => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+
+      els.btnReloadModels.onclick = async () => {
+        await loadModels();
+        alert("Models updated.");
+      };
+
+      // -----------------------
+      // Init
+      // -----------------------
+      async function init() {
+        const ok = await checkSession();
+        if (!ok) {
+          showLogin();
+          return;
+        }
+        showApp();
+
+        await loadModels();
+        const s = loadSettings();
+        if (![...els.modelSelect.options].some(o => o.value === s.model)) {
+          const opt = document.createElement("option");
+          opt.value = s.model;
+          opt.textContent = s.model;
+          els.modelSelect.appendChild(opt);
+          els.modelSelect.value = s.model;
+        }
+        setSettingsUI(s);
+
+        ensureActiveChat();
+        renderChatList();
+        renderMessages();
+      }
+
+      init();
+    </script>
+  </body>
 </html>
